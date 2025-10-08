@@ -10,7 +10,7 @@ unsigned char bytes[] = {0x2, 0x2, 0x20, 0xf3, 0x0, 0xef, 0x0, 0x4, 0x0, 0x1b, 0
 
 import re
 import struct
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any, Union
 
 
 
@@ -248,29 +248,51 @@ def main():
 	while next_index < len(data):
 		tag = data[next_index]
 		try:
-			next_index, _packet_name, _entries, _samples = parse_packet(data, tag, next_index, verbose=False)
+			next_index, _packet_name, _entries, _samples = parse_packet(data, tag, next_index, verbose=True)
 		except ValueError as e:
 			print(f"Error parsing packet: {e}")
 			break
 
 	print(f"Finished parsing. Final index: {next_index}, total data length: {len(data)}")
 
-	# Optional: demonstrate the new packetParser on the same data
-	counts = packetParser(data, verbose=True)
+	# Optional: demonstrate the packetParser on the same data, collecting parsed entries
+	counts, parsed_packets = packetParser(data, verbose=True, collect=True)
 	print(f"Packet counts: {counts}")
 
+	# Also output the parsed data
+	print(f"Parsed packets ({len(parsed_packets)}):")
+	for i, pkt in enumerate(parsed_packets, start=1):
+		print(f"[{i}] idx={pkt['index']} tag=0x{pkt['tag']:02x} type={pkt['type']} samples={pkt['samples']}")
+		for entry in pkt.get("entries", []):
+			etype = entry.get("type")
+			edata = entry.get("data")
+			print(f"    {etype}: {edata}")
 
-def packetParser(data: bytes, verbose: bool = False) -> Dict[str, Dict[str, int]]:
+
+def packetParser(
+	data: bytes,
+	verbose: bool = False,
+	collect: bool = True,
+) -> Union[Dict[str, Dict[str, int]], Tuple[Dict[str, Dict[str, int]], List[Dict[str, Any]]]]:
 	"""Process a raw bytes buffer and count packets and samples per recognized type.
 
-	Returns a dict mapping packet type names to an object:
-	  { 'packets': <count of packets>, 'samples': <total samples> }
+	Returns either just a counts dict or a tuple (counts, parsed_packets) when `collect=True`.
+
+	counts structure: { packet_type: { 'packets': int, 'samples': int } }
+	parsed_packets: list of dicts with keys:
+	  - index: start index of the tag in the buffer
+	  - tag: integer tag value
+	  - type: packet type name (e.g. 'EEG', 'ACC_GYRO', ... or 'UNKNOWN_0xNN')
+	  - samples: number of samples represented by this packet
+	  - entries: the parsed entries list (as returned by parse_packet)
+	  - next_index: index immediately after the consumed packet data
 
 	Recognized packet type names: "EEG", "ACC_GYRO", "OPTICAL", "BATTERY".
 	Unknown tags are returned as type names in the form "UNKNOWN_0xNN". To avoid noise,
 	consecutive unknowns are suppressed until a known packet is successfully detected again.
 	"""
 	counts: Dict[str, Dict[str, int]] = {}
+	parsed_packets: List[Dict[str, Any]] = [] if collect else []
 	idx = 0
 	n = len(data)
 	# When True, we've just seen an unknown; suppress additional unknowns until a known packet is parsed.
@@ -278,7 +300,7 @@ def packetParser(data: bytes, verbose: bool = False) -> Dict[str, Dict[str, int]
 	while idx < n:
 		tag = data[idx]
 		try:
-			next_idx, packet_name, _entries, samples = parse_packet(data, tag, idx, verbose=verbose)
+			next_idx, packet_name, entries, samples = parse_packet(data, tag, idx, verbose=verbose)
 		except ValueError as e:
 			if verbose:
 				print(f"Error parsing at index {idx}: {e}")
@@ -302,7 +324,18 @@ def packetParser(data: bytes, verbose: bool = False) -> Dict[str, Dict[str, int]
 				rec["samples"] += int(samples)
 				counts[packet_name] = rec
 				unknown_suppressed = False
-			# Optionally, user can handle `entries` externally if needed
+
+			if collect:
+				parsed_packets.append(
+					{
+						"index": idx,
+						"tag": int(tag),
+						"type": packet_name,
+						"samples": int(samples),
+						"entries": entries,
+						"next_index": int(next_idx),
+					}
+				)
 
 		# Ensure progress
 		if next_idx <= idx:
@@ -310,7 +343,7 @@ def packetParser(data: bytes, verbose: bool = False) -> Dict[str, Dict[str, int]
 		else:
 			idx = next_idx
 
-	return counts
+	return (counts, parsed_packets) if collect else counts
 
 
 if __name__ == "__main__":

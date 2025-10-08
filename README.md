@@ -1,6 +1,16 @@
 # Muse S Athena Bluetooth protocol
 
-This repo describes my current understanding of the Bluetooth packet format the Muse S Athena (MS-03) uses. The project this was originally for has taken a new direction, so I'm open sourcing this in hopes that someone else might find this useful for further work.
+This repo describes my current understanding of the Bluetooth packet format the Muse S Athena (MS-03) uses. To my knowledge I'm the first to document the new packet format it uses so I'm open sourcing this in hopes that someone else might find this useful for further work and because the project this was originally meant for has taken a new direction so unfortunately I'm unlikely to continue work on this.
+
+## Test script
+
+Run athena_main.py to see the accelerometer and gyro data graphed in real-time.
+The other parsed data is also there, just not graphed.
+There might be unexpected values in the output, my best guess is that this is caused by the packet ID being accidentally found in an region of the packet that is not parsed, thus leading to corrupt data. 
+I think with a few checks for if all the subpackets were decoded (the last next byte is the end of the packet) or if there were unknown IDs in the packet, it should be possible to filter them out.
+
+Tested with Python 3.12.2
+
 
 ## Basic Format
 
@@ -71,4 +81,6 @@ Others in the community might fill in the missing pieces, I would look at these 
 
 ## Acknowledgments
 
-I would also like to thank Alexandre Barachant, Adrian Belmans and others in the OpenBrainTalk and NeuroTechX Slacks for their earlier explorations into the device which served as an important jumping off point in my research.
+The connection script in particular is based on based on the one found in amused-py by Adrian Belmans, linked above.
+
+I would also like to thank Alexandre Barachant, Adrian Belmans again and others in the OpenBrainTalk and NeuroTechX Slacks for their earlier explorations into the device which served as an important jumping off point in my research.
